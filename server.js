@@ -36,7 +36,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({ origin: '*' })); // Autoriser votre frontend
+app.use(cors({ origin: '*' }));// Autoriser votre frontend
 app.use(express.json());
 
 // Log : Démarrage du serveur
