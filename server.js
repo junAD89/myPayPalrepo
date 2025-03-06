@@ -206,6 +206,138 @@ app.post('/api/user/create', async (req, res) => {
 });
 
 
+// Ajoutez ces nouvelles routes à votre fichier serveur existant
+
+// Route pour créer un paiement PayPal
+app.post('/api/paypal/create-payment', async (req, res) => {
+  const { userId, amount, currency = 'EUR', description = 'Abonnement Premium' } = req.body;
+  
+  if (!userId || !amount) {
+    return res.status(400).json({ error: 'Données de paiement manquantes' });
+  }
+
+  console.log(`Création d'un paiement PayPal pour l'utilisateur ${userId} de ${amount} ${currency}`);
+  
+  try {
+    const accessToken = await getPayPalAccessToken();
+    
+    // Création de l'ordre PayPal
+    const response = await axios({
+      method: 'post',
+      url: `${API_BASE}/v2/checkout/orders`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      data: {
+        intent: 'CAPTURE',
+        purchase_units: [{
+          amount: {
+            currency_code: currency,
+            value: amount.toString()
+          },
+          description: description,
+          custom_id: userId // Pour identifier l'utilisateur dans le webhook
+        }],
+        application_context: {
+          return_url: `${process.env.CLIENT_URL}/payment-success`,
+          cancel_url: `${process.env.CLIENT_URL}/payment-cancel`
+        }
+      }
+    });
+    
+    console.log('Paiement PayPal créé avec succès:', response.data.id);
+    res.json({
+      id: response.data.id,
+      links: response.data.links
+    });
+  } catch (error) {
+    console.error('Erreur lors de la création du paiement PayPal:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la création du paiement' });
+  }
+});
+
+// Route pour capturer un paiement PayPal
+app.post('/api/paypal/capture-payment', async (req, res) => {
+  const { orderId, userId } = req.body;
+  
+  if (!orderId || !userId) {
+    return res.status(400).json({ error: 'Données manquantes' });
+  }
+
+  console.log(`Capture du paiement PayPal (${orderId}) pour l'utilisateur ${userId}`);
+  
+  try {
+    const accessToken = await getPayPalAccessToken();
+    
+    // Capture de l'ordre PayPal
+    const response = await axios({
+      method: 'post',
+      url: `${API_BASE}/v2/checkout/orders/${orderId}/capture`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    // Si la capture est réussie, mettre à jour l'abonnement de l'utilisateur
+    if (response.data.status === 'COMPLETED') {
+      console.log(`Paiement PayPal ${orderId} complété. Mise à jour du statut premium pour l'utilisateur ${userId}.`);
+      await updateUserSubscription(userId, true);
+      
+      res.json({
+        success: true,
+        status: response.data.status,
+        message: 'Paiement capturé et abonnement activé'
+      });
+    } else {
+      console.warn(`Paiement PayPal ${orderId} avec statut inattendu:`, response.data.status);
+      res.json({
+        success: false,
+        status: response.data.status,
+        message: 'Statut de paiement inattendu'
+      });
+    }
+  } catch (error) {
+    console.error('Erreur lors de la capture du paiement PayPal:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la capture du paiement' });
+  }
+});
+
+// Route pour vérifier le statut d'un paiement PayPal
+app.get('/api/paypal/check-payment/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  
+  if (!orderId) {
+    return res.status(400).json({ error: 'ID de commande manquant' });
+  }
+
+  console.log(`Vérification du statut du paiement PayPal ${orderId}`);
+  
+  try {
+    const accessToken = await getPayPalAccessToken();
+    
+    // Récupérer les détails de l'ordre PayPal
+    const response = await axios({
+      method: 'get',
+      url: `${API_BASE}/v2/checkout/orders/${orderId}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    console.log(`Statut du paiement PayPal ${orderId}:`, response.data.status);
+    res.json({
+      status: response.data.status,
+      details: response.data
+    });
+  } catch (error) {
+    console.error('Erreur lors de la vérification du paiement PayPal:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la vérification du paiement' });
+  }
+});
+
 // Route pour mettre à jour l'abonnement
 app.post('/api/user/subscription/update', async (req, res) => {
   const { userId, premiumStatus } = req.body;
