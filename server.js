@@ -97,7 +97,41 @@ async function updateUserSubscription(userId, premiumStatus) {
     throw error;
   }
 }
+// Ajouter cette route à votre fichier serveur existant
 
+// Route pour vérifier si un email existe déjà
+app.get('/api/user/check-email', async (req, res) => {
+  const email = req.query.email;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email manquant' });
+  }
+
+  console.log(`Vérification de l'existence de l'email ${email}...`);
+  
+  try {
+    // Chercher dans la collection users les documents où l'email correspond
+    const usersRef = db.collection('users');
+    const snapshot = await usersRef.where('email', '==', email).get();
+    
+    if (snapshot.empty) {
+      console.log(`Aucun utilisateur trouvé avec l'email ${email}`);
+      return res.json({ exists: false, userId: null });
+    }
+    
+    // S'il existe, renvoyer l'ID du premier document trouvé
+    const userData = snapshot.docs[0];
+    console.log(`Utilisateur trouvé avec l'email ${email}: ${userData.id}`);
+    
+    return res.json({ 
+      exists: true, 
+      userId: userData.id 
+    });
+  } catch (error) {
+    console.error('Erreur lors de la vérification de l\'email:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la vérification de l\'email' });
+  }
+}); 
 // Route pour vérifier l'état d'abonnement
 app.get('/api/user/subscription', async (req, res) => {
   const userId = req.query.userId;
