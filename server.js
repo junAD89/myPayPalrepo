@@ -1,16 +1,19 @@
-require('dotenv').config();
+ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const admin = require('firebase-admin');
 
-// Initialisation de Firebase
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// Charger la clé de service depuis le fichier JSON
+const serviceAccount = require('./firebase-credentials.json');
+
+// Initialiser Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
 });
-const db = admin.firestore();
+
+const db = admin.firestore(); // Pour utiliser Firestore
 
 // Configuration de PayPal
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
