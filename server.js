@@ -4,6 +4,9 @@ const cors = require('cors');
 const axios = require('axios');
 const admin = require('firebase-admin');
 
+// Déclarer db comme variable globale
+let db;
+
 // Log : Début de l'initialisation de Firebase
 console.log('Début de l\'initialisation de Firebase...');
 
@@ -19,7 +22,8 @@ try {
   });
   console.log('Firebase Admin SDK initialisé avec succès.');
 
-  const db = admin.firestore(); // Pour utiliser Firestore
+  // Assigner à la variable globale
+  db = admin.firestore(); 
   console.log('Firestore initialisé.');
 } catch (error) {
   console.error('Erreur lors de l\'initialisation de Firebase :', error.message);
@@ -36,7 +40,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({ origin: '*' }));// Autoriser votre frontend
+app.use(cors({ origin: '*' })); // Autoriser toutes les origines (à restreindre en production)
 app.use(express.json());
 
 // Log : Démarrage du serveur
@@ -97,6 +101,10 @@ async function updateUserSubscription(userId, premiumStatus) {
 // Route pour vérifier l'état d'abonnement
 app.get('/api/user/subscription', async (req, res) => {
   const userId = req.query.userId;
+  if (!userId) {
+    return res.status(400).json({ error: 'ID utilisateur manquant' });
+  }
+
   console.log(`Requête reçue pour vérifier l'abonnement de l'utilisateur ${userId}.`);
   try {
     const isPremium = await checkUserSubscription(userId);
@@ -104,6 +112,52 @@ app.get('/api/user/subscription', async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la vérification de l\'abonnement:', error.message);
     res.status(500).json({ error: 'Erreur lors de la vérification de l\'abonnement' });
+  }
+});
+
+// Ajouter cette route à votre fichier serveur existant
+
+// Route pour créer/mettre à jour un utilisateur dans Firestore
+app.post('/api/user/create', async (req, res) => {
+  const { userId, email, premium } = req.body;
+  
+  if (!userId || !email) {
+    return res.status(400).json({ error: 'Données utilisateur manquantes' });
+  }
+
+  console.log(`Création/mise à jour de l'utilisateur ${userId} (${email})`);
+  
+  try {
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set({
+      email: email,
+      premium: premium || false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    console.log(`Utilisateur ${userId} (${email}) enregistré avec succès.`);
+    res.json({ success: true, message: 'Utilisateur enregistré' });
+  } catch (error) {
+    console.error('Erreur lors de l\'enregistrement de l\'utilisateur:', error.message);
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement de l\'utilisateur' });
+  }
+});
+
+// Route pour mettre à jour l'abonnement
+app.post('/api/user/subscription/update', async (req, res) => {
+  const { userId, premiumStatus } = req.body;
+  if (!userId || premiumStatus === undefined) {
+    return res.status(400).json({ error: 'Données manquantes' });
+  }
+
+  console.log(`Mise à jour du statut premium pour l'utilisateur ${userId} : ${premiumStatus}`);
+  try {
+    await updateUserSubscription(userId, premiumStatus);
+    res.json({ success: true, message: 'Statut premium mis à jour' });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l\'abonnement:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'abonnement' });
   }
 });
 
