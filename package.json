@@ -15,7 +15,8 @@
     "fastify": "^4.0.0",
     "querystring": "^0.2.1",
     "express": "^4.21.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "firebase-admin": "^13.2.0"
   },
   "engines": {
     "node": "14.x"
