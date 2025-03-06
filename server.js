@@ -118,6 +118,7 @@ app.get('/api/user/subscription', async (req, res) => {
 // Ajouter cette route à votre fichier serveur existant
 
 // Route pour créer/mettre à jour un utilisateur dans Firestore
+// Route améliorée pour créer/mettre à jour un utilisateur dans Firestore
 app.post('/api/user/create', async (req, res) => {
   const { userId, email, premium } = req.body;
   
@@ -125,24 +126,51 @@ app.post('/api/user/create', async (req, res) => {
     return res.status(400).json({ error: 'Données utilisateur manquantes' });
   }
 
-  console.log(`Création/mise à jour de l'utilisateur ${userId} (${email})`);
+  console.log(`Demande de création/mise à jour pour l'utilisateur ${userId} (${email})`);
   
   try {
+    // Vérifier si l'utilisateur existe déjà
     const userRef = db.collection('users').doc(userId);
-    await userRef.set({
-      email: email,
-      premium: premium || false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    const userDoc = await userRef.get();
     
-    console.log(`Utilisateur ${userId} (${email}) enregistré avec succès.`);
-    res.json({ success: true, message: 'Utilisateur enregistré' });
+    if (userDoc.exists) {
+      console.log(`Utilisateur ${userId} trouvé dans Firestore. Mise à jour des informations.`);
+      
+      // Mettre à jour uniquement le champ updatedAt et conserver les autres données
+      await userRef.update({
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Si l'email est différent, mettre à jour ce champ aussi
+      const userData = userDoc.data();
+      if (userData.email !== email) {
+        await userRef.update({
+          email: email
+        });
+        console.log(`Email de l'utilisateur ${userId} mis à jour: ${email}`);
+      }
+      
+      console.log(`Données de l'utilisateur ${userId} mises à jour avec succès.`);
+      res.json({ success: true, message: 'Informations utilisateur mises à jour', isNew: false });
+    } else {
+      // Créer un nouveau document utilisateur
+      console.log(`Utilisateur ${userId} non trouvé. Création d'un nouveau profil.`);
+      await userRef.set({
+        email: email,
+        premium: premium || false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      console.log(`Nouvel utilisateur ${userId} (${email}) enregistré avec succès.`);
+      res.json({ success: true, message: 'Nouvel utilisateur enregistré', isNew: true });
+    }
   } catch (error) {
     console.error('Erreur lors de l\'enregistrement de l\'utilisateur:', error.message);
     res.status(500).json({ error: 'Erreur lors de l\'enregistrement de l\'utilisateur' });
   }
 });
+
 
 // Route pour mettre à jour l'abonnement
 app.post('/api/user/subscription/update', async (req, res) => {
