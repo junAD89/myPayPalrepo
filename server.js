@@ -339,22 +339,20 @@ app.get('/api/paypal/check-payment/:orderId', async (req, res) => {
 });
 
 // Route pour mettre à jour l'abonnement
-app.post('/api/user/subscription/update', async (req, res) => {
-  const { userId, premiumStatus } = req.body;
-  if (!userId || premiumStatus === undefined) {
-    return res.status(400).json({ error: 'Données manquantes' });
-  }
+ app.post('/api/user/subscription/update', async (req, res) => {
+    const { userId, premiumStatus } = req.body;
+    if (!userId || premiumStatus === undefined) {
+        return res.status(400).json({ error: 'Données manquantes' });
+    }
 
-  console.log(`Mise à jour du statut premium pour l'utilisateur ${userId} : ${premiumStatus}`);
-  try {
-    await updateUserSubscription(userId, premiumStatus);
-    res.json({ success: true, message: 'Statut premium mis à jour' });
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'abonnement:', error.message);
-    res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'abonnement' });
-  }
+    try {
+        await updateUserSubscription(userId, premiumStatus);
+        res.json({ success: true, message: 'Statut premium mis à jour' });
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de l\'abonnement:', error.message);
+        res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'abonnement' });
+    }
 });
-
 // Route pour recevoir les webhooks PayPal
 app.post('/webhook', async (req, res) => {
   console.log('Webhook PayPal reçu :', req.body);
