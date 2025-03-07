@@ -5,7 +5,6 @@ const axios = require('axios');
 const admin = require('firebase-admin');
 const { body, validationResult } = require('express-validator');
 
-
 // Initialisation de Firebase
 const serviceAccount = require('./firebase-credentials.json');
 admin.initializeApp({
@@ -32,6 +31,7 @@ app.use(express.json());
 
 // Fonction pour obtenir un token d'accès PayPal
 async function getPayPalAccessToken() {
+  console.log('[PayPal] Tentative de récupération du token d\'accès...');
   try {
     const response = await axios.post(`${API_BASE}/v1/oauth2/token`, 'grant_type=client_credentials', {
       headers: {
@@ -39,19 +39,23 @@ async function getPayPalAccessToken() {
         'Authorization': `Basic ${Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64')}`
       }
     });
+    console.log('[PayPal] Token d\'accès récupéré avec succès.');
     return response.data.access_token;
   } catch (error) {
-    console.error('Erreur lors de la récupération du token PayPal:', error.message);
+    console.error('[PayPal] Erreur lors de la récupération du token:', error.message);
     throw new Error('Impossible de récupérer le token PayPal');
   }
 }
 
 // Route pour obtenir l'URL du script PayPal
 app.get('/api/paypal/script-url', (req, res) => {
+  console.log('[PayPal] Requête reçue pour l\'URL du script.');
   if (!PAYPAL_CLIENT_ID) {
+    console.error('[PayPal] Erreur : PAYPAL_CLIENT_ID non défini.');
     return res.status(500).json({ error: 'Configuration PayPal manquante' });
   }
   const scriptUrl = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=EUR`;
+  console.log('[PayPal] URL du script générée:', scriptUrl);
   res.json({ scriptUrl });
 });
 
@@ -59,21 +63,30 @@ app.get('/api/paypal/script-url', (req, res) => {
 app.get('/api/user/subscription', [
   body('userId').isString().notEmpty()
 ], async (req, res) => {
+  console.log('[Subscription] Requête reçue pour vérifier l\'abonnement.');
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error('[Subscription] Erreur de validation:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { userId } = req.query;
+  console.log('[Subscription] userId reçu:', userId);
+
   try {
     const userRef = db.collection('users').doc(userId);
     const doc = await userRef.get();
+
     if (!doc.exists) {
+      console.error('[Subscription] Utilisateur non trouvé:', userId);
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
-    res.json({ premium: doc.data().premium || false });
+
+    const premiumStatus = doc.data().premium || false;
+    console.log('[Subscription] Statut premium de l\'utilisateur:', premiumStatus);
+    res.json({ premium: premiumStatus });
   } catch (error) {
-    console.error('Erreur lors de la vérification de l\'abonnement:', error.message);
+    console.error('[Subscription] Erreur lors de la vérification de l\'abonnement:', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -84,12 +97,16 @@ app.post('/api/user/create', [
   body('email').isEmail(),
   body('premium').isBoolean()
 ], async (req, res) => {
+  console.log('[User] Requête reçue pour créer/mettre à jour un utilisateur.');
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error('[User] Erreur de validation:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { userId, email, premium } = req.body;
+  console.log('[User] Données reçues:', { userId, email, premium });
+
   try {
     const userRef = db.collection('users').doc(userId);
     const userData = {
@@ -101,12 +118,15 @@ app.post('/api/user/create', [
     const doc = await userRef.get();
     if (!doc.exists) {
       userData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      console.log('[User] Nouvel utilisateur créé:', userId);
+    } else {
+      console.log('[User] Utilisateur existant mis à jour:', userId);
     }
 
     await userRef.set(userData, { merge: true });
     res.json({ success: true, message: 'Utilisateur créé/mis à jour avec succès' });
   } catch (error) {
-    console.error('Erreur lors de l\'enregistrement de l\'utilisateur:', error.message);
+    console.error('[User] Erreur lors de l\'enregistrement de l\'utilisateur:', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -118,12 +138,16 @@ app.post('/api/paypal/create-payment', [
   body('currency').isString().optional(),
   body('description').isString().optional()
 ], async (req, res) => {
+  console.log('[PayPal] Requête reçue pour créer un paiement.');
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error('[PayPal] Erreur de validation:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { userId, amount, currency = 'EUR', description = 'Abonnement Premium' } = req.body;
+  console.log('[PayPal] Données reçues:', { userId, amount, currency, description });
+
   try {
     const accessToken = await getPayPalAccessToken();
     const response = await axios.post(`${API_BASE}/v2/checkout/orders`, {
@@ -147,9 +171,10 @@ app.post('/api/paypal/create-payment', [
       }
     });
 
+    console.log('[PayPal] Paiement créé avec succès:', response.data.id);
     res.json({ id: response.data.id, links: response.data.links });
   } catch (error) {
-    console.error('Erreur lors de la création du paiement PayPal:', error.message);
+    console.error('[PayPal] Erreur lors de la création du paiement:', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -159,12 +184,16 @@ app.post('/api/paypal/capture-payment', [
   body('orderId').isString().notEmpty(),
   body('userId').isString().notEmpty()
 ], async (req, res) => {
+  console.log('[PayPal] Requête reçue pour capturer un paiement.');
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error('[PayPal] Erreur de validation:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { orderId, userId } = req.body;
+  console.log('[PayPal] Données reçues:', { orderId, userId });
+
   try {
     const accessToken = await getPayPalAccessToken();
     const response = await axios.post(`${API_BASE}/v2/checkout/orders/${orderId}/capture`, {}, {
@@ -175,19 +204,21 @@ app.post('/api/paypal/capture-payment', [
     });
 
     if (response.data.status === 'COMPLETED') {
+      console.log('[PayPal] Paiement capturé avec succès:', orderId);
       const userRef = db.collection('users').doc(userId);
       await userRef.set({ premium: true }, { merge: true });
       res.json({ success: true, message: 'Paiement capturé et abonnement activé' });
     } else {
+      console.warn('[PayPal] Statut de paiement inattendu:', response.data.status);
       res.json({ success: false, message: 'Statut de paiement inattendu' });
     }
   } catch (error) {
-    console.error('Erreur lors de la capture du paiement PayPal:', error.message);
+    console.error('[PayPal] Erreur lors de la capture du paiement:', error.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
 // Démarrer le serveur
 app.listen(PORT, () => {
-  console.log(`Serveur en écoute sur le port ${PORT}`);
+  console.log(`[Server] Serveur en écoute sur le port ${PORT}`);
 });
