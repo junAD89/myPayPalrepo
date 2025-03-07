@@ -67,6 +67,20 @@ async function getPayPalAccessToken() {
   }
 }
 
+// Route pour obtenir l'URL du script PayPal
+app.get('/api/paypal/script-url', (req, res) => {
+  if (!PAYPAL_CLIENT_ID) {
+    console.error('Erreur : PAYPAL_CLIENT_ID non défini dans les variables d\'environnement');
+    return res.status(500).json({ error: 'Configuration PayPal manquante' });
+  }
+  
+  // Générer l'URL du script avec le client ID stocké en sécurité sur le serveur
+  const scriptUrl = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=EUR`;
+  
+  console.log('URL du script PayPal générée');
+  res.json({ scriptUrl });
+});
+
 // Fonction pour vérifier l'état d'abonnement d'un utilisateur
 async function checkUserSubscription(userId) {
   console.log(`Vérification de l'abonnement pour l'utilisateur ${userId}...`);
