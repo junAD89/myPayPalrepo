@@ -5,7 +5,8 @@ const axios = require('axios');
 const admin = require('firebase-admin');
 const { param, query, body, validationResult } = require('express-validator');
 
-
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 10;
 // Initialisation de Firebase
 const serviceAccount = require('./firebase-credentials.json');
 admin.initializeApp({
@@ -67,6 +68,125 @@ app.get('/api/paypal/script-url', (req, res) => {
     console.log('[PayPal] ✅ URL générée:', scriptUrl);
     res.json({ scriptUrl });
 });
+
+// Route d'inscription
+app.post('/api/auth/register', [
+    body('email').isEmail().withMessage('Email invalide'),
+    body('password').isLength({ min: 6 }).withMessage('Le mot de passe doit faire au moins 6 caractères')
+], async (req, res) => {
+    console.log('[Auth] 📝 Tentative d\'inscription');
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        console.error('[Auth] ❌ Erreurs de validation:', errors.array());
+        return res.status(400).json({ 
+            success: false, 
+            message: errors.array()[0].msg 
+        });
+    }
+
+    const { email, password } = req.body;
+
+    try {
+        // Vérifier si l'email existe déjà
+        const userDoc = await db.collection('users')
+            .where('email', '==', email)
+            .get();
+
+        if (!userDoc.empty) {
+            console.log('[Auth] ❌ Email déjà utilisé');
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Cet email est déjà utilisé' 
+            });
+        }
+
+        // Hasher le mot de passe
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+        const userId = `user_${Date.now()}`;
+
+        // Créer l'utilisateur
+        await db.collection('users').doc(userId).set({
+            email,
+            password: hashedPassword,
+            premium: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log('[Auth] ✅ Inscription réussie');
+        res.json({ 
+            success: true, 
+            message: 'Inscription réussie' 
+        });
+    } catch (error) {
+        console.error('[Auth] ❌ Erreur:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Erreur lors de l\'inscription' 
+        });
+    }
+});
+
+// Route de connexion
+app.post('/api/auth/login', [
+    body('email').isEmail().withMessage('Email invalide'),
+    body('password').notEmpty().withMessage('Mot de passe requis')
+], async (req, res) => {
+    console.log('[Auth] 🔐 Tentative de connexion');
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        console.error('[Auth] ❌ Erreurs de validation:', errors.array());
+        return res.status(400).json({ 
+            success: false, 
+            message: errors.array()[0].msg 
+        });
+    }
+
+    const { email, password } = req.body;
+
+    try {
+        // Rechercher l'utilisateur
+        const userDocs = await db.collection('users')
+            .where('email', '==', email)
+            .get();
+
+        if (userDocs.empty) {
+            console.log('[Auth] ❌ Utilisateur non trouvé');
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Email ou mot de passe incorrect' 
+            });
+        }
+
+        const userDoc = userDocs.docs[0];
+        const userData = userDoc.data();
+
+        // Vérifier le mot de passe
+        const validPassword = await bcrypt.compare(password, userData.password);
+        if (!validPassword) {
+            console.log('[Auth] ❌ Mot de passe incorrect');
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Email ou mot de passe incorrect' 
+            });
+        }
+
+        console.log('[Auth] ✅ Connexion réussie');
+        res.json({ 
+            success: true, 
+            userId: userDoc.id,
+            message: 'Connexion réussie' 
+        });
+    } catch (error) {
+        console.error('[Auth] ❌ Erreur:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Erreur lors de la connexion' 
+        });
+    }
+});
+
 
 // Route pour vérifier l'abonnement
 app.get('/api/user/subscription', [
