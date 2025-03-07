@@ -249,6 +249,35 @@ app.post('/api/auth/login', [
         });
     }
 });
+// Ajouter cette nouvelle route avec les routes existantes
+app.post('/api/user/subscription/update', [
+    body('userId').isString().notEmpty(),
+    body('premium').isBoolean()
+], async (req, res) => {
+    console.log('[Subscription] 🔄 Updating subscription status');
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        console.error('[Subscription] ❌ Validation errors:', errors.array());
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { userId, premium } = req.body;
+
+    try {
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({
+            premium: premium,
+            premiumUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log('[Subscription] ✅ Status updated for user:', userId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[Subscription] ❌ Update error:', error);
+        res.status(500).json({ error: 'Failed to update subscription status' });
+    }
+});
 
 // Subscription check route
 app.get('/api/user/subscription', [
