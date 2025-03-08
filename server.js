@@ -68,7 +68,44 @@ app.get('/api/paypal/script-url', (req, res) => {
     res.json({ scriptUrl });
 });
 
-// Health Check Route
+// Health Check Route// Add this near the top of your server.js file with other constants
+const SUBSCRIPTION_PRICE = 4.99;
+
+// Modify the create-order endpoint to use the server-side price
+app.post('/api/paypal/create-order', [
+    body('userId').isString().notEmpty(),
+    body('currency').isString().optional()
+], async (req, res) => {
+    console.log('[PayPal] 🛍️ Creating order...');
+    const { userId, currency = 'EUR' } = req.body;
+    
+    try {
+        const accessToken = await getPayPalAccessToken();
+        const response = await axios.post(`${API_BASE}/v2/checkout/orders`, {
+            intent: 'CAPTURE',
+            purchase_units: [{
+                amount: {
+                    currency_code: currency,
+                    value: SUBSCRIPTION_PRICE.toString()
+                }
+            }]
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        console.log('[PayPal] ✅ Order created:', response.data.id);
+        res.json({ 
+            orderId: response.data.id,
+            price: SUBSCRIPTION_PRICE
+        });
+    } catch (error) {
+        console.error('[PayPal] ❌ Create order error:', error);
+        res.status(500).json({ error: 'Failed to create order' });
+    }
+});
 // Health Check Route
 app.get('/api/health-check', (req, res) => {
     console.log('[Health] 🏥 Health check request received');
