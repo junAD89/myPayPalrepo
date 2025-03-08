@@ -218,8 +218,7 @@ app.post('/api/auth/register', [
         });
     }
 });
-
-app.post('/api/auth/login', [
+ app.post('/api/auth/login', [
     body('email').isEmail(),
     body('password').notEmpty()
 ], async (req, res) => {
@@ -243,7 +242,7 @@ app.post('/api/auth/login', [
 
         if (userDocs.empty) {
             console.log('[Auth] ❌ User not found');
-            return res.status(400).json({ 
+            return res.status(401).json({ 
                 success: false, 
                 message: 'Invalid email or password' 
             });
@@ -255,14 +254,16 @@ app.post('/api/auth/login', [
         const validPassword = await bcrypt.compare(password, userData.password);
         if (!validPassword) {
             console.log('[Auth] ❌ Invalid password');
-            return res.status(400).json({ 
+            // Ajouter plus de logs pour déboguer
+            console.log('[Auth] 🔍 Sending failure response');
+            return res.status(401).json({ 
                 success: false, 
                 message: 'Invalid email or password' 
             });
         }
 
         console.log('[Auth] ✅ Login successful');
-        res.json({ 
+        res.status(200).json({ 
             success: true, 
             userId: userDoc.id,
             message: 'Login successful' 
