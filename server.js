@@ -68,6 +68,32 @@ app.get('/api/paypal/script-url', (req, res) => {
     res.json({ scriptUrl });
 });
 
+// Health Check Route
+// Health Check Route
+app.get('/api/health-check', (req, res) => {
+    console.log('[Health] 🏥 Health check request received');
+    try {
+        // Vérification basique du serveur
+        console.log('[Health] ✅ Server is healthy');
+        res.json({ 
+            success: true, 
+            timestamp: Date.now(),
+            status: 'healthy',
+            // Ajout des informations importantes pour le client
+            server: {
+                status: 'running',
+                version: process.env.npm_package_version || '1.0.0'
+            }
+        });
+    } catch (error) {
+        console.error('[Health] ❌ Health check failed:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Server health check failed',
+            timestamp: Date.now()
+        });
+    }
+});
 app.post('/api/paypal/create-order', [
     body('userId').isString().notEmpty(),
     body('price').isNumeric(),
